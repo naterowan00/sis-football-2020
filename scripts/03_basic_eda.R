@@ -141,6 +141,9 @@ tech_pressure %>%
 
 
 
+# Creating the Passing EPA metric -----------------------------------------
+
+
 
 ### Next thing to explore: How does pressure affect the EPA of a play?
 ### Then, I might be able to quantify the value of a pressure. Perhaps after
@@ -152,10 +155,15 @@ pass_plays <- passes %>%
   slice(1) %>%
   ungroup()
 
+### Average EPA of any pass play
+avg_pass_epa <- pass_plays %>%
+  summarise(avg_epa = mean(EPA, na.rm = TRUE)) %>%
+  as.numeric()
+
 ### YASSS QUEEN this table shows average EPA of plays where there is pressure, a sack
 ### a QB fumble, and/or an interception. This is so cool. 
 ### MIGHT WANT TO REMOVE INTERCEPTION CONDITION
-pass_plays %>%
+epa_values_table <- pass_plays %>%
   group_by(PressureOnPlay, SackOnPlay, FumbleByPasser) %>%
   summarise(
     avg_epa = mean(EPA, na.rm = TRUE),
@@ -163,13 +171,53 @@ pass_plays %>%
   ) %>%
   ungroup() %>%
   filter(n > 5) %>%
-  arrange(desc(avg_epa))
+  mutate(epa_diff = avg_epa - -.01786565) %>% ### -.01786565 is the average EPA on passes for this data
+  arrange(desc(avg_epa)) %>%
+  select(
+    PressureOnPlay:avg_epa, epa_diff, n
+  )
+
+### Function that pulls out the EPA change for each possible combo of pressure, sack, and fumble
+calculate_pass_stat_value <- function (data = epa_values_table, pressure, sack, fumble) {
+  data %>%
+    filter(PressureOnPlay == pressure, SackOnPlay == sack, FumbleByPasser == fumble) %>%
+    pull(epa_diff)
+}
+
+### Pull the coefficent for each type of play
+no_pressure_value <- calculate_pass_stat_value(epa_values_table, 0, 0, 0)
+pressure_value <- calculate_pass_stat_value(epa_values_table, 1, 0, 0)
+sack_value <- calculate_pass_stat_value(epa_values_table, 1, 1, 0)
+fumble_value <- calculate_pass_stat_value(epa_values_table, 1, 1, 1)
 
 
-### Average EPA of any pass play
-pass_plays %>%
-  summarise(avg_epa = mean(EPA, na.rm = TRUE))
+### This guy includes pass breakups and interceptions. My question: how does a pressure
+### increase the likelihood of a pass breakup or interception? Perhaps this is the
+### best way to value pressures. Example: If there is a 20% chance of an INT when there is pressure,
+### then the value of a pressure is 0.2*interception value
+View(pass_plays %>%
+  group_by(PressureOnPlay, SackOnPlay, FumbleByPasser, PassBreakupOnPlay, InterceptionOnPlay) %>%
+  summarise(
+    avg_epa = mean(EPA, na.rm = TRUE),
+    n = n()
+  ) %>%
+  ungroup() %>%
+  filter(n > 5) %>%
+  mutate(epa_diff = avg_epa - -.01786565) %>% ### -.01786565 is the average EPA on passes for this data
+  arrange(desc(avg_epa)) %>%
+  select(
+    PressureOnPlay:avg_epa, epa_diff, n
+  ))
 
+
+### Example of Chandler Jones's numbers in the second half of 2019
+passes %>%
+  filter(Name == "Chandler Jones") %>%
+  select(Pressure:ForcedFumble) %>%
+  summarise_all(sum) 
+
+
+pass_plays
 
 
 
