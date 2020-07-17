@@ -163,7 +163,7 @@ avg_pass_epa <- pass_plays %>%
 ### YASSS QUEEN this table shows average EPA of plays where there is pressure, a sack
 ### a QB fumble, and/or an interception. This is so cool. 
 ### MIGHT WANT TO REMOVE INTERCEPTION CONDITION
-epa_values_table <- pass_plays %>%
+pass_rush_epa_values_table <- pass_plays %>%
   group_by(PressureOnPlay, SackOnPlay, FumbleByPasser) %>%
   summarise(
     avg_epa = mean(EPA, na.rm = TRUE),
@@ -178,25 +178,22 @@ epa_values_table <- pass_plays %>%
   )
 
 ### Function that pulls out the EPA change for each possible combo of pressure, sack, and fumble
-calculate_pass_stat_value <- function (data = epa_values_table, pressure, sack, fumble) {
+calculate_pass_rush_stat_value <- function (data, pressure, sack, fumble) {
   data %>%
     filter(PressureOnPlay == pressure, SackOnPlay == sack, FumbleByPasser == fumble) %>%
     pull(epa_diff)
 }
 
-### Pull the coefficent for each type of play
-no_pressure_value <- calculate_pass_stat_value(epa_values_table, 0, 0, 0)
-pressure_value <- calculate_pass_stat_value(epa_values_table, 1, 0, 0)
-sack_value <- calculate_pass_stat_value(epa_values_table, 1, 1, 0)
-fumble_value <- calculate_pass_stat_value(epa_values_table, 1, 1, 1)
+### Pull the coefficient for each type of play
+no_pressure_value <- calculate_pass_stat_value(pass_rush_epa_values_table, 0, 0, 0)
+pressure_value <- calculate_pass_stat_value(pass_rush_epa_values_table, 1, 0, 0)
+sack_value <- calculate_pass_stat_value(pass_rush_epa_values_table, 1, 1, 0)
+fumble_value <- calculate_pass_stat_value(pass_rush_epa_values_table, 1, 1, 1)
 
 
-### This guy includes pass breakups and interceptions. My question: how does a pressure
-### increase the likelihood of a pass breakup or interception? Perhaps this is the
-### best way to value pressures. Example: If there is a 20% chance of an INT when there is pressure,
-### then the value of a pressure is 0.2*interception value
-View(pass_plays %>%
-  group_by(PressureOnPlay, SackOnPlay, FumbleByPasser, PassBreakupOnPlay, InterceptionOnPlay) %>%
+### This guy includes pass breakups and interceptions. Focusing on passes defended
+pass_defense_epa_values_table <- pass_plays %>%
+  group_by(PassBreakupOnPlay, InterceptionOnPlay) %>%
   summarise(
     avg_epa = mean(EPA, na.rm = TRUE),
     n = n()
@@ -206,18 +203,30 @@ View(pass_plays %>%
   mutate(epa_diff = avg_epa - -.01786565) %>% ### -.01786565 is the average EPA on passes for this data
   arrange(desc(avg_epa)) %>%
   select(
-    PressureOnPlay:avg_epa, epa_diff, n
-  ))
+    PassBreakupOnPlay:avg_epa, epa_diff, n
+  )
+
+### Function that pulls out the EPA change for each possible combo of pbu and int
+calculate_pass_defense_stat_value <- function (data, pbu, int) {
+  data %>%
+    filter(PassBreakupOnPlay == pbu, InterceptionOnPlay == int) %>%
+    pull(epa_diff)
+}
+
+### Pull the pbu and int coefficients 
+pbu_value <- calculate_pass_defense_stat_value(pass_defense_epa_values_table, pbu = 1, int = 0)
+int_value <- calculate_pass_defense_stat_value(pass_defense_epa_values_table, pbu = 1, int = 1)
+
 
 
 ### Example of Chandler Jones's numbers in the second half of 2019
 passes %>%
   filter(Name == "Chandler Jones") %>%
   select(Pressure:ForcedFumble) %>%
-  summarise_all(sum) 
+  summarise_if(is.numeric, sum)
 
 
-pass_plays
+
 
 
 
