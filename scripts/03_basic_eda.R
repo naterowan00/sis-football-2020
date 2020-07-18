@@ -2,7 +2,7 @@
 ### Name: Nate Rowan
 ### Project: Sports Info Solutions 2020 Challenge
 ### Date Created: 7/15/2020
-### Date Last Modified: 7/15/2020
+### Date Last Modified: 7/17/2020
 ### Description: Exploratory Data Analysis
 ############################
 library(tidyverse); theme_set(theme_minimal())
@@ -68,6 +68,7 @@ right_side <- data %>%
 ### Show entire distribution of where linemen line up
 left_side + center + right_side
 
+right_side
 
 
 

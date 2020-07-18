@@ -17,6 +17,13 @@ data <- read_csv(here::here("datasets/raw_sis_data.csv"), na = "NULL")
 passes <- data %>%
   filter(EventType == "pass")
 
+### Pull out each play from the passes data (no duplicates based on player data)
+pass_plays <- passes %>%
+  group_by(GameID, EventID) %>%
+  slice(1) %>%
+  ungroup()
+
+
 ### There was pressure on 36.1% of dropbacks
 passes %>%
   summarise(pressures = mean(PressureOnPlay))
@@ -83,11 +90,6 @@ tech_pressure %>%
 
 # Creating the Passing EPA metric -----------------------------------------
 
-### Pull out each play from the passes data (no duplicates based on player data)
-pass_plays <- passes %>%
-  group_by(GameID, EventID) %>%
-  slice(1) %>%
-  ungroup()
 
 ### Average EPA of any pass play
 avg_pass_epa <- pass_plays %>%
@@ -117,10 +119,10 @@ calculate_pass_rush_stat_value <- function (data, pressure, sack, fumble) {
 }
 
 ### Pull the coefficient for each type of play
-no_pressure_value <- calculate_pass_stat_value(pass_rush_epa_values_table, 0, 0, 0)
-pressure_value <- calculate_pass_stat_value(pass_rush_epa_values_table, 1, 0, 0)
-sack_value <- calculate_pass_stat_value(pass_rush_epa_values_table, 1, 1, 0)
-fumble_value <- calculate_pass_stat_value(pass_rush_epa_values_table, 1, 1, 1)
+no_pressure_value <- calculate_pass_rush_stat_value(pass_rush_epa_values_table, 0, 0, 0)
+pressure_value <- calculate_pass_rush_stat_value(pass_rush_epa_values_table, 1, 0, 0)
+sack_value <- calculate_pass_rush_stat_value(pass_rush_epa_values_table, 1, 1, 0)
+fumble_value <- calculate_pass_rush_stat_value(pass_rush_epa_values_table, 1, 1, 1)
 
 
 ### This guy includes pass breakups and interceptions. Focusing on passes defended
@@ -151,8 +153,59 @@ int_value <- calculate_pass_defense_stat_value(pass_defense_epa_values_table, pb
 
 
 
+# Apply pass metric to each position --------------------------------------
+
+
+pass_epa_added <- function(pressures = 0, solo_sacks = 0, assisted_sacks = 0, fumbles = 0, pbus = 0, ints = 0) {
+  sacks <- solo_sacks + assisted_sacks / 2
+  pressures <- pressures - sacks
+  sacks <- sacks - fumbles
+  pbus <- pbus - ints
+  
+  epa <- pressure_value * pressures + 
+         sack_value * sacks + 
+         fumble_value * fumbles + 
+         pbu_value * pbus +
+         int_value * ints
+  epa
+}
+
 ### Example of Chandler Jones's numbers in the second half of 2019
 passes %>%
   filter(Name == "Chandler Jones") %>%
-  select(Pressure:ForcedFumble) %>%
-  summarise_if(is.numeric, sum)
+  select(Pressure, SoloSack, AssistedSack, ForcedFumble, PassBreakup, Interception) %>%
+  summarise_if(is.numeric, sum) %>%
+  flatten_dbl()
+
+### Chandler Jones value on pass plays
+pass_epa_added(pressures = 37, solo_sacks = 10, assisted_sacks = 1, fumbles = 4, pbus = 4, ints = 0)
+
+### Calculate the Pass EPA Value of each position (defensive end, defensive tackle, linebacker)
+passes %>%
+  filter(
+    RosterPosition == "DE" |
+    RosterPosition == "DT" | 
+    RosterPosition == "LB"
+  ) %>%
+  group_by(RosterPosition) %>%
+  select(Pressure, SoloSack, AssistedSack, ForcedFumble, PassBreakup, Interception, IsRushing) %>%
+  summarise_if(is.numeric, sum) %>%
+  mutate(
+    sacks = SoloSack + AssistedSack / 2,
+    pressure_epa = pressure_value * (Pressure - sacks),
+    sack_epa = sack_value * (sacks - ForcedFumble),
+    fumble_epa = fumble_value * ForcedFumble,
+    pbu_epa = pbu_value * (PassBreakup - Interception),
+    int_epa = int_value * Interception,
+    pass_epa_added = pressure_epa + sack_epa + fumble_epa + pbu_epa + int_epa,
+    pass_epa_added_per_rush = pass_epa_added / IsRushing,
+    pass_epa_added_per_25_rush = pass_epa_added_per_rush * 25
+  ) %>%
+  select(RosterPosition, pass_epa_added, IsRushing, pass_epa_added_per_rush, pass_epa_added_per_25_rush)
+
+
+  
+
+
+
+
